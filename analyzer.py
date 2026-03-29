@@ -1,117 +1,153 @@
-# ==========================================
-# Import the required libraries
-# ==========================================
-import PIL # python image library
-import PIL.Image
 import tensorflow as tf
-import pathlib # to manage the dataset path
 import numpy as np
+import cv2
+import os
 
 # ==========================================
-# Define the data path
+# 1. SETUP & MODEL LOADING
 # ==========================================
-# Assuming your dataset is in a folder named 'breadboard_dataset'
-# Inside this folder, you should have two subfolders: 'PASS' and 'FAIL'
-data_dir_path = 'breadboard_dataset'
-data_dir = pathlib.Path(data_dir_path)
-print(f"Dataset path: {data_dir}")
+# Make sure this matches your final grid search model name
+MODEL_PATH = 'best_breadboard_model.keras'
+IMG_HEIGHT = 224
+IMG_WIDTH = 224
 
-# Print the number of images in the dataset
-image_count = len(list(data_dir.glob('*/*.jpg')))
-print(f"Total images found: {image_count}")
+# Keras automatically sorts folders alphabetically, so F comes before P
+CLASS_NAMES = ['FAIL', 'PASS'] 
 
-# ==========================================
-# Split into train and test datasets
-# ==========================================
-batch_size = 16 # Slightly larger batch size for stability, adjust as needed
-img_height = 224 # Standard CNN input size (changed slightly from 244)
-img_width = 224
+print("Loading model... Please wait.")
+try:
+    model = tf.keras.models.load_model(MODEL_PATH)
+    print("Model loaded successfully!\n")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    print("Make sure 'best_breadboard_model.keras' is in the same folder.")
+    exit()
 
-# Train data
-train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-  data_dir,
-  validation_split=0.2, # Reserving 20% for validation
-  subset="training",
-  seed=123,
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
-
-# Test/Validation data
-val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-  data_dir,
-  validation_split=0.2,
-  subset="validation",
-  seed=123,
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
-
-# Extract class names to verify ('PASS', 'FAIL')
-class_names = train_ds.class_names
-print(f"Classes detected: {class_names}")
-
-# ==========================================
-# Define the CNN Model
-# ==========================================
-num_classes = 2 # ONLY TWO LABELS: PASS and FAIL
-
-model = tf.keras.Sequential([
-  tf.keras.layers.Rescaling(1./255, input_shape=(img_height, img_width, 3)),
-  tf.keras.layers.Conv2D(16, 3, padding='same', activation='relu'),
-  tf.keras.layers.MaxPooling2D(),
-  tf.keras.layers.Conv2D(32, 3, padding='same', activation='relu'), # Increased filters to learn better breadboard features
-  tf.keras.layers.MaxPooling2D(),
-  tf.keras.layers.Conv2D(64, 3, padding='same', activation='relu'),
-  tf.keras.layers.MaxPooling2D(),
-  tf.keras.layers.Flatten(),
-  tf.keras.layers.Dense(128, activation='relu'),
-  tf.keras.layers.Dense(num_classes)
-])
-
-# ==========================================
-# Compile and Train the Model
-# ==========================================
-model.compile(
-  optimizer='adam',
-  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-  metrics=['accuracy']
-)
-
-model.summary()
-
-epochs = 10 # You may need to increase this if accuracy is low
-history = model.fit(
-  train_ds,
-  validation_data=val_ds,
-  epochs=epochs
-)
-
-# ==========================================
-# Evaluate Model
-# ==========================================
-print("\n--- Final Evaluation on Validation Data ---")
-model.evaluate(val_ds)
-
-# ==========================================
-# Predict a single new image
-# ==========================================
-def test_new_breadboard(image_path):
-    """
-    Function to test a newly captured breadboard image.
-    """
-    img = tf.keras.utils.load_img(
-        image_path, target_size=(img_height, img_width)
-    )
-    img_array = tf.keras.utils.img_to_array(img)
-    img_array = tf.expand_dims(img_array, 0) # Create a batch of 1
-
-    predictions = model.predict(img_array)
+# Helper function to process the prediction
+def predict_image(img_array):
+    # Expand dimensions to create a batch of 1
+    img_array = tf.expand_dims(img_array, 0) 
+    
+    # Run the prediction
+    predictions = model.predict(img_array, verbose=0)
     score = tf.nn.softmax(predictions[0])
-
-    predicted_class = class_names[np.argmax(score)]
+    
+    predicted_class = CLASS_NAMES[np.argmax(score)]
     confidence = 100 * np.max(score)
     
-    print(f"\n--- PREDICTION RESULT ---")
-    print(f"This circuit is a {predicted_class} with a {confidence:.2f}% confidence.")
+    return predicted_class, confidence
+
+
+# ==========================================
+# 2. MODE: STATIC IMAGE
+# ==========================================
+def analyze_static_image(image_path):
+    if not os.path.exists(image_path):
+        print(f"File not found: {image_path}")
+        return
+
+    # Load image using Keras (reads as RGB)
+    img = tf.keras.utils.load_img(image_path, target_size=(IMG_HEIGHT, IMG_WIDTH))
+    img_array = tf.keras.utils.img_to_array(img)
     
-# Uncomment and update the path below to test a live photo:
-# test_new_breadboard("path/to/test/board123.jpg")
+    predicted_class, confidence = predict_image(img_array)
+    
+    print(f"\n--- ANALYSIS RESULT ---")
+    print(f"Image: {image_path}")
+    print(f"Result: {predicted_class} ({confidence:.2f}% confidence)\n")
+
+
+# ==========================================
+# 3. MODE: LIVE VIDEO FEED
+# ==========================================
+def analyze_video():
+    print("\n--- LIVE VIDEO MODE ---")
+    print("Opening webcam...")
+    print("Press 't' to TEST the current frame.")
+    print("Press 'q' to QUIT the video feed.\n")
+    
+    # 0 is usually the default built-in webcam. 
+    # Change to 1 or 2 if you have an external USB camera plugged in.
+    cap = cv2.VideoCapture(0)
+    
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
+
+    # To store the result text to display on screen
+    display_text = "Press 't' to Test"
+    color = (255, 255, 255) # Default White
+
+    while True:
+        # Read the current frame from the webcam
+        ret, frame = cap.read()
+        if not ret:
+            print("Failed to grab frame.")
+            break
+            
+        # Draw the latest analysis result on the screen
+        # cv2 uses BGR colors (Blue, Green, Red)
+        cv2.putText(frame, display_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 
+                    1, color, 2, cv2.LINE_AA)
+
+        # Show the video feed
+        cv2.imshow('Breadboard Analyzer', frame)
+
+        # Wait for key press (1ms delay)
+        key = cv2.waitKey(1) & 0xFF
+
+        # If 't' is pressed -> Test the circuit
+        if key == ord('t'):
+            print("Capturing frame for analysis...")
+            
+            # 1. Resize the frame to match what the CNN expects (224x224)
+            resized_frame = cv2.resize(frame, (IMG_WIDTH, IMG_HEIGHT))
+            
+            # 2. OpenCV captures in BGR, but our model was trained on RGB images. We must convert it!
+            rgb_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
+            
+            # 3. Convert to numpy array and predict
+            img_array = np.array(rgb_frame, dtype=np.float32)
+            predicted_class, confidence = predict_image(img_array)
+            
+            # Update the text to show the result on the video feed
+            display_text = f"RESULT: {predicted_class} ({confidence:.1f}%)"
+            print(display_text)
+            
+            # Change text color based on result
+            if predicted_class == 'PASS':
+                color = (0, 255, 0) # Green for PASS
+            else:
+                color = (0, 0, 255) # Red for FAIL
+                
+        # If 'q' is pressed -> Quit
+        elif key == ord('q'):
+            print("Closing webcam...")
+            break
+
+    # Release the camera and close the window
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+# ==========================================
+# MAIN MENU
+# ==========================================
+if __name__ == "__main__":
+    print("=======================================")
+    print("    Breadboard Quality Control AI      ")
+    print("=======================================")
+    print("1: Analyze a single static image")
+    print("2: Start live webcam analyzer")
+    print("=======================================")
+    
+    choice = input("Enter your choice (1 or 2): ")
+    
+    if choice == '1':
+        img_path = input("Enter the path to your image (e.g., test.jpg): ")
+        analyze_static_image(img_path)
+    elif choice == '2':
+        # You may need to run `pip install opencv-python` in your terminal if you don't have it
+        analyze_video()
+    else:
+        print("Invalid choice. Exiting.")
