@@ -1,1 +1,4 @@
 *.keras
+/tuner_results
+*.csv
+*.joblib
