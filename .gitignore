@@ -1,4 +1,18 @@
+# Ignore trained Models
+Models/
 *.keras
-/tuner_results
-*.csv
+*.h5
+*.pb
 *.joblib
+
+# Ignore massive Datasets
+Dataset/augmented_dataset/
+Dataset/flattened_dataset/
+
+# Ignore heavy tuning logs
+Logs/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
