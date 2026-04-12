@@ -16,3 +16,7 @@ Logs/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Ignore environment files
+.env
+venv/
