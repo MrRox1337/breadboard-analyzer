@@ -23,3 +23,6 @@ venv/
 
 # Ignore docx files
 *.docx
+
+# Ignore Claude files
+.Claude/
