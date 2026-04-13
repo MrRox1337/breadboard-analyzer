@@ -7,7 +7,7 @@ import os
 # 1. SETUP & MODEL LOADING
 # ==========================================
 # Make sure this matches your final grid search model name
-MODEL_PATH = 'best_breadboard_model.keras'
+MODEL_PATH = 'Models/best_breadboard_model.keras'
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
 
