@@ -9,8 +9,8 @@ An end-to-end machine learning pipeline that classifies breadboard circuits as *
 
 | Model | Test Accuracy | Notes |
 |-------|--------------|-------|
-| CNN — Tuned (RandomSearch) | **94.53%** val | Best overall |
-| CNN — ReLU + Adam | 83.97% | Baseline deep model |
+| CNN — Tuned (RandomSearch) | **93.75%** val | Best overall |
+| CNN — ReLU + Adam | 87.02% | Baseline deep model |
 | SVM (Linear) — CV | 86.98% mean | Best classical (5-fold CV) |
 | SVM (Linear) — test | 82.08% | Best classical (held-out) |
 | Logistic Regression | 79.19% | — |
@@ -126,7 +126,7 @@ Set `LOAD_PRETRAINED = False` (default). Run all cells top to bottom. Expected r
 ## Key Experimental Findings
 
 ### Activation Functions (ReLU vs Tanh)
-ReLU achieved **90.62%** validation accuracy vs Tanh at **65.62%** — a 25 percentage-point gap. Tanh converged to the majority-class baseline and failed to learn useful features, consistent with vanishing gradients in the 3-conv + 1-dense architecture.
+ReLU achieved **91.41%** validation accuracy vs Tanh at **65.62%** — a 25.78 percentage-point gap. Tanh converged to the majority-class baseline and failed to learn useful features, consistent with vanishing gradients in the 3-conv + 1-dense architecture.
 
 ### Optimisation Algorithms
 
@@ -144,35 +144,36 @@ Gradient Descent diverged at lr=0.01. Newton's Method converged fastest (10 iter
 
 | Optimiser | Val Accuracy |
 |-----------|-------------|
-| Adam | **90.62%** |
+| Adam | **91.41%** |
 | SGD | 65.62% |
 
 ### Hyperparameter Tuning
 
 | Approach | Method | Result |
 |----------|--------|--------|
-| CNN | keras-tuner RandomSearch (10 trials) | **94.53%** (+3.91pp), best: 64 filters, 128 units, dropout=0.2, lr=0.001 |
+| CNN | keras-tuner RandomSearch (10 trials) | **93.75%** (+2.34pp), best: 64 filters, 128 units, dropout=0.2, lr=0.001 |
 | SVM | sklearn RandomizedSearchCV (10 iter, 3-fold) | 82.08% (no improvement; C=0.1, linear kernel was already optimal) |
 
 ### Cross-Validation (5-fold stratified)
 
-| Model | CV Mean | Std Dev | F1 | F2 | F3 | F4 | F5 |
-|-------|---------|---------|-----|-----|-----|-----|-----|
-| SVM (Linear) | **86.98%** | ±2.77% | 84.9% | 84.1% | 91.3% | 85.5% | 89.1% |
-| Logistic Regression | 83.21% | ±2.64% | 82.7% | 79.0% | 87.0% | 82.6% | 84.8% |
-| Gradient Boosting | 79.59% | ±3.52% | 82.0% | 77.5% | 79.0% | 74.6% | 84.8% |
-| Random Forest | 77.42% | ±1.29% | 79.1% | 75.4% | 76.8% | 77.5% | 78.3% |
-| KNN (k=5) | 72.36% | ±2.19% | 71.2% | 71.7% | 73.2% | 69.6% | 76.1% |
-| MLP | 60.49% | ±13.26% | 64.7% | **34.8%** | 65.2% | 73.2% | 64.5% |
+| Model | CV Mean | Std Dev | Fold Range |
+|-------|---------|---------|------------|
+| SVM (Linear) | **86.98%** | ±2.77% | 84.1% – 91.3% |
+| Logistic Regression | 83.21% | ±2.64% | 79.0% – 87.0% |
+| Gradient Boosting | 79.59% | ±3.52% | 74.6% – 84.8% |
+| Random Forest | 77.42% | **±1.29%** | 75.4% – 79.1% |
+| KNN (k=5) | 72.36% | ±2.19% | 69.6% – 76.1% |
+| MLP | 60.49% | ±13.26% | **34.8% – 73.2%** |
 
-SVM was the most consistent classical model. MLP was severely unstable; Fold 2 scored 34.8%, below the majority-class baseline, confirming training divergence on that partition.
+SVM was the most consistent classical model. MLP was severely unstable; one fold dropped to 34.8%, below the majority-class baseline, confirming training divergence on that partition.
 
 ### CNN Final Test Performance (131 held-out images)
-- **Accuracy**: 83.97%
-- **F1-score**: 0.84 (macro)
-- **FAIL recall**: 0.89 (89% of defects detected)
-- **False Positives**: 8/75 FAIL boards misclassified as PASS (the critical QC error)
-- **Overfitting gap**: 9.45% (train 98.51% vs val 89.06%)
+- **Accuracy**: 87.02%
+- **F1-score**: 0.86 (macro)
+- **FAIL recall**: 0.95 (95% of defects detected)
+- **False Positives**: 4/75 FAIL boards misclassified as PASS (the critical QC error)
+- **False Negatives**: 13/56 PASS boards rejected
+- **Overfitting gap**: 8.55% (train 99.17% vs val 90.62%)
 
 ---
 
@@ -188,9 +189,9 @@ flowchart TD
 
     subgraph S3_CNN["Sec 3 — CNN Design & Optimisation"]
         CNN --> SP["70 / 15 / 15 Split\n605 train · 128 val · 131 test"]
-        SP --> ACT["Activation Comparison\nReLU 90.62% vs Tanh 65.62%"]
-        ACT --> OPT["CNN Optimiser Comparison\nAdam 90.62% vs SGD 65.62%"]
-        OPT --> RS["Keras Tuner RandomSearch\n10 trials · Best val: 94.53%\n64 filters · 128 units · dropout 0.2 · lr 0.001"]
+        SP --> ACT["Activation Comparison\nReLU 91.41% vs Tanh 65.62%"]
+        ACT --> OPT["CNN Optimiser Comparison\nAdam 91.41% vs SGD 65.62%"]
+        OPT --> RS["Keras Tuner RandomSearch\n10 trials · Best val: 93.75%\n64 filters · 128 units · dropout 0.2 · lr 0.001"]
     end
 
     subgraph S3_TRAD["Sec 3 — Traditional Optimisers"]
@@ -205,10 +206,10 @@ flowchart TD
 
     subgraph S5["Sec 5 — Experimental Rigor"]
         RSCV --> CV["5-Fold Stratified CV\nSVM 86.98% +/-2.77% best\nMLP 60.49% +/-13.26% worst"]
-        RS --> EVAL["CNN Test Evaluation\n83.97% accuracy · F1 = 0.84\nFAIL recall 89% · FP = 8 / 75"]
-        CV --> CMP["Model Comparison\nCNN 83.97% > SVM 82.08%"]
+        RS --> EVAL["CNN Test Evaluation\n87.02% accuracy · F1 = 0.86\nFAIL recall 95% · FP = 4 / 75"]
+        CV --> CMP["Model Comparison\nCNN 87.02% > SVM 82.08%"]
         EVAL --> CMP
-        EVAL --> OFA["Overfitting Analysis\nTrain 98.51% · Val 89.06% · Gap 9.45%"]
+        EVAL --> OFA["Overfitting Analysis\nTrain 99.17% · Val 90.62% · Gap 8.55%"]
     end
 
     CMP --> DEP["Deployment\nanalyzer.py · webcam inference\nArduino LED indicator · robotic arm integration"]
