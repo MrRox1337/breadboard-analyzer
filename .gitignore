@@ -26,3 +26,7 @@ venv/
 
 # Ignore Claude files
 .Claude/
+
+# Ignore LaTeX
+*.tex
+*.bib

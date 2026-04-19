@@ -155,7 +155,17 @@ Gradient Descent diverged at lr=0.01. Newton's Method converged fastest (10 iter
 | SVM | sklearn RandomizedSearchCV (10 iter, 3-fold) | 82.08% (no improvement; C=0.1, linear kernel was already optimal) |
 
 ### Cross-Validation (5-fold stratified)
-SVM was the most consistent classical model (86.98% ± 2.77%). MLP was severely unstable (60.49% ± 13.26%), with one fold scoring 34.8% — below the majority-class baseline.
+
+| Model | CV Mean | Std Dev | F1 | F2 | F3 | F4 | F5 |
+|-------|---------|---------|-----|-----|-----|-----|-----|
+| SVM (Linear) | **86.98%** | ±2.77% | 84.9% | 84.1% | 91.3% | 85.5% | 89.1% |
+| Logistic Regression | 83.21% | ±2.64% | 82.7% | 79.0% | 87.0% | 82.6% | 84.8% |
+| Gradient Boosting | 79.59% | ±3.52% | 82.0% | 77.5% | 79.0% | 74.6% | 84.8% |
+| Random Forest | 77.42% | ±1.29% | 79.1% | 75.4% | 76.8% | 77.5% | 78.3% |
+| KNN (k=5) | 72.36% | ±2.19% | 71.2% | 71.7% | 73.2% | 69.6% | 76.1% |
+| MLP | 60.49% | ±13.26% | 64.7% | **34.8%** | 65.2% | 73.2% | 64.5% |
+
+SVM was the most consistent classical model. MLP was severely unstable; Fold 2 scored 34.8%, below the majority-class baseline, confirming training divergence on that partition.
 
 ### CNN Final Test Performance (131 held-out images)
 - **Accuracy**: 83.97%
@@ -163,6 +173,47 @@ SVM was the most consistent classical model (86.98% ± 2.77%). MLP was severely 
 - **FAIL recall**: 0.89 (89% of defects detected)
 - **False Positives**: 8/75 FAIL boards misclassified as PASS (the critical QC error)
 - **Overfitting gap**: 9.45% (train 98.51% vs val 89.06%)
+
+---
+
+## ML Workflow
+
+```mermaid
+flowchart TD
+    A["Raw Dataset\n54 images · 19 PASS · 35 FAIL"] --> B["Offline Augmentation\n8 rotations x 2 mirrors = 16x expansion"]
+    B --> C["Augmented Dataset\n864 images · 304 PASS · 560 FAIL"]
+
+    C --> CNN["CNN Branch\n224x224x3 = 150,528 input dims"]
+    C --> CML["Classical ML Branch\n64x64x3 flatten = 12,288 input dims"]
+
+    subgraph S3_CNN["Sec 3 — CNN Design & Optimisation"]
+        CNN --> SP["70 / 15 / 15 Split\n605 train · 128 val · 131 test"]
+        SP --> ACT["Activation Comparison\nReLU 90.62% vs Tanh 65.62%"]
+        ACT --> OPT["CNN Optimiser Comparison\nAdam 90.62% vs SGD 65.62%"]
+        OPT --> RS["Keras Tuner RandomSearch\n10 trials · Best val: 94.53%\n64 filters · 128 units · dropout 0.2 · lr 0.001"]
+    end
+
+    subgraph S3_TRAD["Sec 3 — Traditional Optimisers"]
+        CML --> PCA["PCA Reduction\n50 components · 87.1% variance"]
+        PCA --> TOPT["Optimiser Comparison on Logistic Reg\nCoord Search 69.36% · GD 65.90% · Newton 73.41%"]
+    end
+
+    subgraph S4["Sec 4 — Baseline Comparison"]
+        CML --> BL["6 Classifiers · 80/20 Split\nSVM 82.08% · LR 79.19% · GB 78.03%\nRF 74.57% · KNN 69.94% · MLP 64.74%"]
+        BL --> RSCV["RandomizedSearchCV on SVM\nBest: C=0.1 linear · 82.08% (no gain)"]
+    end
+
+    subgraph S5["Sec 5 — Experimental Rigor"]
+        RSCV --> CV["5-Fold Stratified CV\nSVM 86.98% +/-2.77% best\nMLP 60.49% +/-13.26% worst"]
+        RS --> EVAL["CNN Test Evaluation\n83.97% accuracy · F1 = 0.84\nFAIL recall 89% · FP = 8 / 75"]
+        CV --> CMP["Model Comparison\nCNN 83.97% > SVM 82.08%"]
+        EVAL --> CMP
+        EVAL --> OFA["Overfitting Analysis\nTrain 98.51% · Val 89.06% · Gap 9.45%"]
+    end
+
+    CMP --> DEP["Deployment\nanalyzer.py · webcam inference\nArduino LED indicator · robotic arm integration"]
+    OFA --> DEP
+```
 
 ---
 
