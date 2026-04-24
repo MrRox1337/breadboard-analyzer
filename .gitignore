@@ -30,3 +30,6 @@ venv/
 # Ignore LaTeX
 *.tex
 *.bib
+
+# Ignore zip
+*.zip
