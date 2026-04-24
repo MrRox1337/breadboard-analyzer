@@ -1,0 +1,7 @@
+Name: Aman Mishra and Faseeh Mohammed
+MISIS: M00983641 and M01088120
+
+Full codebase: https://github.com/MrRox1337/breadboard-analyzer/tree/main
+Technical report: https://github.com/MrRox1337/breadboard-analyzer/blob/main/PDE4444_Technical_Report.pdf
+Technical presentation: https://github.com/MrRox1337/breadboard-analyzer/blob/main/PDE4444_Technical_Presentation.pdf
+Full readme: https://mrrox1337.github.io/breadboard-analyzer/
