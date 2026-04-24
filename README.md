@@ -5,6 +5,62 @@ An end-to-end machine learning pipeline that classifies breadboard circuits as *
 
 ---
 
+## ML Workflow
+
+```mermaid
+flowchart TD
+    A["Raw Dataset\n54 images · 19 PASS · 35 FAIL"] --> B["Offline Augmentation\n8 rotations x 2 mirrors = 16x expansion"]
+    B --> C["Augmented Dataset\n864 images · 304 PASS · 560 FAIL"]
+
+    C --> CNN["CNN Branch\n224x224x3 = 150,528 input dims"]
+    C --> CML["Classical ML Branch\n64x64x3 flatten = 12,288 input dims"]
+
+    subgraph S3_CNN["Sec 3 — CNN Design & Optimisation"]
+        CNN --> SP["70 / 15 / 15 Split\n605 train · 128 val · 131 test"]
+        SP --> ACT["Activation Comparison\nReLU 91.41% vs Tanh 65.62%"]
+        ACT --> OPT["CNN Optimiser Comparison\nAdam 91.41% vs SGD 65.62%"]
+        OPT --> RS["Keras Tuner RandomSearch\n10 trials · Best val: 93.75%\n64 filters · 128 units · dropout 0.2 · lr 0.001"]
+    end
+
+    subgraph S3_TRAD["Sec 3 — Traditional Optimisers"]
+        CML --> PCA["PCA Reduction\n50 components · 87.1% variance"]
+        PCA --> TOPT["Optimiser Comparison on Logistic Reg\nCoord Search 69.36% · GD 65.90% · Newton 73.41%"]
+    end
+
+    subgraph S4["Sec 4 — Baseline Comparison"]
+        CML --> BL["6 Classifiers · 80/20 Split\nSVM 82.08% · LR 79.19% · GB 78.03%\nRF 74.57% · KNN 69.94% · MLP 64.74%"]
+        BL --> RSCV["RandomizedSearchCV on SVM\nBest: C=0.1 linear · 82.08% (no gain)"]
+    end
+
+    subgraph S5["Sec 5 — Experimental Rigor"]
+        RSCV --> CV["5-Fold Stratified CV\nSVM 86.98% +/-2.77% best\nMLP 60.49% +/-13.26% worst"]
+        RS --> EVAL["CNN Test Evaluation\n87.02% accuracy · F1 = 0.86\nFAIL recall 95% · FP = 4 / 75"]
+        CV --> CMP["Model Comparison\nCNN 87.02% > SVM 82.08%"]
+        EVAL --> CMP
+        EVAL --> OFA["Overfitting Analysis\nTrain 99.17% · Val 90.62% · Gap 8.55%"]
+    end
+
+    CMP --> DEP["Deployment\nanalyzer.py · webcam inference\nArduino LED indicator · robotic arm integration"]
+    OFA --> DEP
+```
+
+---
+
+## Table of Contents
+
+- [Results at a Glance](#results-at-a-glance)
+- [Repository Structure](#repository-structure)
+- [Notebook Structure](#notebook-structure-assessment-sections)
+- [Setup](#setup)
+- [Running the Notebook](#running-the-notebook)
+- [Execution Workflow](#execution-workflow)
+- [Dataset](#dataset)
+- [Key Experimental Findings](#key-experimental-findings)
+- [Architecture](#architecture)
+- [License](#license)
+
+---
+
 ## Results at a Glance
 
 | Model | Test Accuracy | Notes |
@@ -113,6 +169,76 @@ Set `LOAD_PRETRAINED = False` (default). Run all cells top to bottom. Expected r
 
 ---
 
+## Execution Workflow
+
+This section covers how to fully reproduce the experimental outcomes on your own machine, and how to run the deployment scripts once the notebook has completed.
+
+### Step 1 — Clone the repository
+
+```bash
+git clone <repo-url>
+cd breadboard-analyzer
+```
+
+### Step 2 — Create and activate a virtual environment
+
+```bash
+python -m venv venv
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # Linux/macOS
+```
+
+### Step 3 — Install all dependencies
+
+```bash
+pip install tensorflow==2.21.0 scikit-learn numpy pandas matplotlib seaborn pillow opencv-python scipy joblib keras-tuner tensorboard ipykernel
+```
+
+### Step 4 — Register the Jupyter kernel
+
+```bash
+python -m ipykernel install --user --name=breadboard-venv --display-name "Python (breadboard-venv)"
+```
+
+### Step 5 — Run the notebook
+
+Open `PDE4444_Technical_Portfolio.ipynb` in VS Code and select **Python (breadboard-venv)** as the kernel. Run all cells from top to bottom using **Run All**.
+
+- To reproduce all training from scratch, ensure `LOAD_PRETRAINED = False` in Cell 16.
+- To load the saved models and skip training (faster), set `LOAD_PRETRAINED = True` in Cell 16.
+
+All outputs — plots, metrics, confusion matrices, and cross-validation tables — are generated inline within the notebook. The trained models are saved automatically to the `Models/` directory on first run.
+
+### Step 6 — Run the inference and deployment scripts
+
+The following scripts can be run independently **after the notebook has completed at least one full execution** (so that models exist in `Models/`).
+
+**Live webcam inference (`analyzer.py`)**
+
+Loads the best saved CNN and opens a webcam feed. Each frame is classified in real time with a PASS/FAIL overlay.
+
+```bash
+python Scripts/analyzer.py
+```
+
+Press `q` to quit. The script also accepts a static image path as an argument for offline testing:
+
+```bash
+python Scripts/analyzer.py --image path/to/image.jpg
+```
+
+**Arduino LED indicator (`led_notifier.py`)**
+
+Sends the PASS/FAIL result from the model to an Arduino over serial, which lights a green or red LED accordingly. Ensure the Arduino is connected and the correct COM port is set in the script before running.
+
+```bash
+python Scripts/led_notifier.py
+```
+
+> Both scripts depend on models saved in `Models/`. Run the notebook first to generate them, or use the pre-trained models already committed to the repository.
+
+---
+
 ## Dataset
 
 - **Original**: 54 manually captured overhead images of breadboard circuits (19 PASS, 35 FAIL)
@@ -174,47 +300,6 @@ SVM was the most consistent classical model. MLP was severely unstable; one fold
 - **False Positives**: 4/75 FAIL boards misclassified as PASS (the critical QC error)
 - **False Negatives**: 13/56 PASS boards rejected
 - **Overfitting gap**: 8.55% (train 99.17% vs val 90.62%)
-
----
-
-## ML Workflow
-
-```mermaid
-flowchart TD
-    A["Raw Dataset\n54 images · 19 PASS · 35 FAIL"] --> B["Offline Augmentation\n8 rotations x 2 mirrors = 16x expansion"]
-    B --> C["Augmented Dataset\n864 images · 304 PASS · 560 FAIL"]
-
-    C --> CNN["CNN Branch\n224x224x3 = 150,528 input dims"]
-    C --> CML["Classical ML Branch\n64x64x3 flatten = 12,288 input dims"]
-
-    subgraph S3_CNN["Sec 3 — CNN Design & Optimisation"]
-        CNN --> SP["70 / 15 / 15 Split\n605 train · 128 val · 131 test"]
-        SP --> ACT["Activation Comparison\nReLU 91.41% vs Tanh 65.62%"]
-        ACT --> OPT["CNN Optimiser Comparison\nAdam 91.41% vs SGD 65.62%"]
-        OPT --> RS["Keras Tuner RandomSearch\n10 trials · Best val: 93.75%\n64 filters · 128 units · dropout 0.2 · lr 0.001"]
-    end
-
-    subgraph S3_TRAD["Sec 3 — Traditional Optimisers"]
-        CML --> PCA["PCA Reduction\n50 components · 87.1% variance"]
-        PCA --> TOPT["Optimiser Comparison on Logistic Reg\nCoord Search 69.36% · GD 65.90% · Newton 73.41%"]
-    end
-
-    subgraph S4["Sec 4 — Baseline Comparison"]
-        CML --> BL["6 Classifiers · 80/20 Split\nSVM 82.08% · LR 79.19% · GB 78.03%\nRF 74.57% · KNN 69.94% · MLP 64.74%"]
-        BL --> RSCV["RandomizedSearchCV on SVM\nBest: C=0.1 linear · 82.08% (no gain)"]
-    end
-
-    subgraph S5["Sec 5 — Experimental Rigor"]
-        RSCV --> CV["5-Fold Stratified CV\nSVM 86.98% +/-2.77% best\nMLP 60.49% +/-13.26% worst"]
-        RS --> EVAL["CNN Test Evaluation\n87.02% accuracy · F1 = 0.86\nFAIL recall 95% · FP = 4 / 75"]
-        CV --> CMP["Model Comparison\nCNN 87.02% > SVM 82.08%"]
-        EVAL --> CMP
-        EVAL --> OFA["Overfitting Analysis\nTrain 99.17% · Val 90.62% · Gap 8.55%"]
-    end
-
-    CMP --> DEP["Deployment\nanalyzer.py · webcam inference\nArduino LED indicator · robotic arm integration"]
-    OFA --> DEP
-```
 
 ---
 
